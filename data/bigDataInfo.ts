@@ -12,6 +12,21 @@ export interface NodeData {
   children?: NodeData[]
 }
 
+/** Nodo del árbol D3 con datos de Big Data (usado en MapaConceptual, Panel, Modal) */
+export interface TreeNode {
+  data: NodeData
+  depth: number
+  x?: number
+  y?: number
+  x0?: number
+  y0?: number
+  id?: number
+  parent?: TreeNode | null
+  children?: TreeNode[] | null
+  _children?: TreeNode[] | null
+  highlight?: boolean
+}
+
 export const bigDataTree: NodeData = {
   name: "Big Data",
   description: "Exploración completa de los principios, tecnologías y aplicaciones del Big Data.",

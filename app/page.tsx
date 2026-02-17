@@ -5,9 +5,10 @@ import MapaConceptual from '@/components/MapaConceptual'
 import PanelInformacion from '@/components/PanelInformacion'
 import Header from '@/components/Header'
 import AuthorCards from '@/components/AuthorCards'
+import type { TreeNode } from '@/data/bigDataInfo'
 
 export default function Home() {
-  const [selectedNode, setSelectedNode] = useState<any>(null)
+  const [selectedNode, setSelectedNode] = useState<TreeNode | null>(null)
   const [darkMode, setDarkMode] = useState(true)
 
   return (

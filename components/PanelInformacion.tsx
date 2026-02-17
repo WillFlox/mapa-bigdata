@@ -4,9 +4,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import { X, ExternalLink, CheckCircle, AlertCircle, Lightbulb, Code } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { TreeNode } from '@/data/bigDataInfo'
 
 interface PanelInformacionProps {
-  node: any
+  node: TreeNode
   onClose: () => void
 }
 
@@ -136,7 +137,7 @@ export default function PanelInformacion({ node, onClose }: PanelInformacionProp
                 <h4 className="font-semibold text-sm text-cyan-400">Recursos Externos</h4>
               </div>
               <ul className="space-y-2">
-                {node.data.resources.map((resource: any, index: number) => (
+                {node.data.resources.map((resource: { title: string; url: string }, index: number) => (
                   <li key={index}>
                     <a
                       href={resource.url}

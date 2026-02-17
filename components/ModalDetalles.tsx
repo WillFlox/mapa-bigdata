@@ -4,9 +4,10 @@ import ReactMarkdown from 'react-markdown'
 import remarkBreaks from 'remark-breaks'
 import { X, ExternalLink, CheckCircle, AlertCircle, Lightbulb, Code } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import type { TreeNode } from '@/data/bigDataInfo'
 
 interface ModalDetallesProps {
-    node: any
+    node: TreeNode | null
     isOpen: boolean
     onClose: () => void
 }
@@ -154,7 +155,7 @@ export default function ModalDetalles({ node, isOpen, onClose }: ModalDetallesPr
                                             <h3 className="font-semibold text-lg text-cyan-400">Recursos Externos</h3>
                                         </div>
                                         <ul className="space-y-2">
-                                            {node.data.resources.map((resource: any, index: number) => (
+                                            {node.data.resources.map((resource: { title: string; url: string }, index: number) => (
                                                 <li key={index}>
                                                     <a
                                                         href={resource.url}

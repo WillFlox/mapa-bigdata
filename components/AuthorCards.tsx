@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { User } from 'lucide-react'
 import { authors } from '@/data/authors'
 import type { Author } from '@/data/authors'
@@ -7,11 +8,13 @@ import type { Author } from '@/data/authors'
 function AuthorCard({ author }: { author: Author }) {
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-800/50 border border-gray-700/50 hover:border-purple-500/30 transition-colors">
-      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center">
+      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-gray-700 flex items-center justify-center relative">
         {author.photoUrl ? (
-          <img
+          <Image
             src={author.photoUrl}
             alt={author.name}
+            width={48}
+            height={48}
             className="w-full h-full object-cover"
           />
         ) : (

@@ -2,13 +2,21 @@
 
 import { useEffect, useRef, useState } from 'react'
 import * as d3 from 'd3'
-import { bigDataTree, NodeData } from '@/data/bigDataInfo'
+import { bigDataTree, NodeData, TreeNode } from '@/data/bigDataInfo'
 import { motion } from 'framer-motion'
 import { ZoomIn, ZoomOut, Maximize2, Download, ChevronLeft, ChevronRight } from 'lucide-react'
 import ModalDetalles from './ModalDetalles'
 
+/** Nodo del árbol D3 con propiedades añadidas en runtime (_children, x0, y0) */
+type TreeRoot = Omit<d3.HierarchyNode<NodeData>, 'children'> & {
+  _children?: TreeRoot[] | null
+  children?: TreeRoot[] | null
+  x0?: number
+  y0?: number
+}
+
 interface MapaConceptualProps {
-  onNodeSelect: (node: any) => void
+  onNodeSelect: (node: TreeNode) => void
   searchTerm: string
   viewMode: 'tree' | 'radial'
   darkMode: boolean
@@ -19,13 +27,13 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
   const containerRef = useRef<HTMLDivElement>(null)
   const [dimensions, setDimensions] = useState({ width: 1200, height: 800 })
   const [zoomLevel, setZoomLevel] = useState(1)
-  const zoomBehaviorRef = useRef<any>(null)
-  const [modalNode, setModalNode] = useState<any>(null)
+  const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null)
+  const [modalNode, setModalNode] = useState<TreeNode | null>(null)
   const [isModalOpen, setIsModalOpen] = useState(false)
 
-  // Presentation mode
-  const rootRef = useRef<any>(null)
-  const updateFnRef = useRef<((node: any) => void) | null>(null)
+  // Presentation mode (root es el árbol D3 con _children, x0, y0)
+  const rootRef = useRef<TreeRoot | null>(null)
+  const updateFnRef = useRef<((node: TreeRoot) => void) | null>(null)
   const currentMainIndexRef = useRef<number | null>(null)
   const [currentMainIndex, setCurrentMainIndex] = useState<number | null>(null)
   const [currentMainName, setCurrentMainName] = useState<string>('')
@@ -45,7 +53,7 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
     if (!root.children) return
 
     // Collapse all main nodes first
-    root.children.forEach((child: any) => {
+    root.children!.forEach((child: TreeRoot) => {
       if (child.children) {
         child._children = child.children
         child.children = null
@@ -63,7 +71,7 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
     currentMainIndexRef.current = index
     setCurrentMainIndex(index)
     setCurrentMainName(target.data.name)
-    onNodeSelect(target)
+    onNodeSelect(target as TreeNode)
     // update() llamará fitNodesToView automáticamente
     updateFn(root)
   }
@@ -120,12 +128,12 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
       .scale(1)
     svg.call(zoom.transform, initialTransform)
 
-    const root = d3.hierarchy(bigDataTree, (d: NodeData) => d.children) as any
+    const root = d3.hierarchy(bigDataTree, (d: NodeData) => d.children) as TreeRoot
     root.x0 = height / 2
     root.y0 = 0
 
     // Colapsar todo el árbol recursivamente
-    const collapse = (d: any) => {
+    const collapse = (d: TreeRoot) => {
       if (d.children) {
         d._children = d.children
         d._children.forEach(collapse)
@@ -150,7 +158,7 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
     const duration = 750
 
     // Ajusta zoom y pan para que todos los nodos visibles quepan en pantalla
-    function fitNodesToView(visibleNodes: any[]) {
+    function fitNodesToView(visibleNodes: TreeNode[]) {
       if (!svgRef.current || !zoomBehaviorRef.current || !containerRef.current) return
       if (visibleNodes.length === 0) return
 
@@ -162,8 +170,8 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
       if (visibleNodes.length === 1) {
         const d = visibleNodes[0]
         const scale = 1.8
-        const tx = w / 2 - scale * d.y
-        const ty = h / 2 - scale * d.x
+        const tx = w / 2 - scale * (d.y ?? 0)
+        const ty = h / 2 - scale * (d.x ?? 0)
         d3.select(svgRef.current!)
           .transition().duration(850)
           .call(zoomBehaviorRef.current.transform, d3.zoomIdentity.translate(tx, ty).scale(scale))
@@ -171,8 +179,8 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
       }
 
       // Posición SVG de cada nodo: translate(d.y, d.x)
-      const allSvgX = visibleNodes.map((d: any) => d.y) // eje horizontal
-      const allSvgY = visibleNodes.map((d: any) => d.x) // eje vertical
+      const allSvgX = visibleNodes.map((d: TreeNode) => d.y ?? 0) // eje horizontal
+      const allSvgY = visibleNodes.map((d: TreeNode) => d.x ?? 0) // eje vertical
 
       const minX = Math.min(...allSvgX)
       const maxX = Math.max(...allSvgX)
@@ -202,52 +210,52 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
           d3.zoomIdentity.translate(w / 2 - scale * cx, h / 2 - scale * cy).scale(scale))
     }
 
-    function update(source: any) {
-      let nodes: any, links: any
+    function update(source: TreeRoot) {
+      let nodes: TreeNode[], links: d3.HierarchyPointLink<NodeData>[]
 
       if (viewMode === 'radial') {
         const tree = d3.tree<NodeData>()
           .size([2 * Math.PI, Math.min(width, height) / 2 - 100])
           .separation((a, b) => (a.parent === b.parent ? 1 : 2) / a.depth)
 
-        const treeData = tree(root)
-        nodes = treeData.descendants()
+        const treeData = tree(root as d3.HierarchyNode<NodeData>)
+        nodes = treeData.descendants() as TreeNode[]
         links = treeData.links()
 
-        nodes.forEach((d: any) => {
+        nodes.forEach((d: TreeNode) => {
           d.y = d.depth * 120
-          const angle = d.x
-          d.x = d.y * Math.cos(angle - Math.PI / 2)
-          d.y = d.y * Math.sin(angle - Math.PI / 2)
+          const angle = d.x ?? 0
+          d.x = (d.y ?? 0) * Math.cos(angle - Math.PI / 2)
+          d.y = (d.y ?? 0) * Math.sin(angle - Math.PI / 2)
         })
       } else {
         const tree = d3.tree<NodeData>()
           .nodeSize([100, 350])
 
-        const treeData = tree(root)
-        nodes = treeData.descendants()
+        const treeData = tree(root as d3.HierarchyNode<NodeData>)
+        nodes = treeData.descendants() as TreeNode[]
         links = treeData.links()
 
-        nodes.forEach((d: any) => {
+        nodes.forEach((d: TreeNode) => {
           d.y = d.depth * 350
         })
       }
 
       if (searchTerm) {
-        nodes.forEach((d: any) => {
+        nodes.forEach((d: TreeNode) => {
           const matches = d.data.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             d.data.description.toLowerCase().includes(searchTerm.toLowerCase())
           d.highlight = matches
         })
       }
 
-      const link = g.selectAll<SVGPathElement, any>('.link')
-        .data(links, (d: any) => d.target.id || (d.target.id = ++i))
+      const link = g.selectAll<SVGPathElement, d3.HierarchyPointLink<NodeData>>('.link')
+        .data(links, (d: d3.HierarchyPointLink<NodeData>) => (d.target as TreeNode).id || ((d.target as TreeNode).id = ++i))
 
       link.exit().transition()
         .duration(duration)
         .attr('d', () => {
-          const o = { x: source.x, y: source.y }
+          const o = { x: source.x ?? 0, y: source.y ?? 0 }
           return diagonal(o, o)
         })
         .style('opacity', 0)
@@ -256,22 +264,22 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
       const linkEnter = link.enter().insert('path', 'g')
         .attr('class', 'link')
         .attr('d', () => {
-          const o = { x: source.x0, y: source.y0 }
+          const o = { x: source.x0 ?? 0, y: source.y0 ?? 0 }
           return diagonal(o, o)
         })
         .style('fill', 'none')
-        .style('stroke', (d: any) => d.target.data.color)
+        .style('stroke', (d: d3.HierarchyPointLink<NodeData>) => d.target.data.color)
         .style('stroke-width', 2)
         .style('stroke-opacity', 0.6)
         .style('opacity', 0)
 
-      linkEnter.merge(link as any).transition()
+      linkEnter.merge(link).transition()
         .duration(duration)
-        .attr('d', (d: any) => diagonal(d.source, d.target))
+        .attr('d', (d: d3.HierarchyPointLink<NodeData>) => diagonal(d.source, d.target))
         .style('opacity', 1)
 
-      const node = g.selectAll<SVGGElement, any>('.node')
-        .data(nodes, (d: any) => d.id || (d.id = ++i))
+      const node = g.selectAll<SVGGElement, TreeNode>('.node')
+        .data(nodes, (d: TreeNode) => d.id || (d.id = ++i))
 
       node.exit().transition()
         .duration(duration)
@@ -284,7 +292,7 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
         .attr('transform', () => `translate(${source.y0},${source.x0})`)
         .style('cursor', 'pointer')
         .style('opacity', 0)
-        .on('click', (event, d: any) => {
+        .on('click', (_event, d: TreeNode) => {
           const isLeaf = !d.children && !d._children
 
           if (isLeaf) {
@@ -300,11 +308,11 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
               d._children = null
             }
             onNodeSelect(d)
-            update(d)
+            update(d as TreeRoot)
 
             // Actualizar índice de presentación si es un nodo principal
             if (d.depth === 1 && rootRef.current?.children) {
-              const idx = rootRef.current.children.indexOf(d)
+              const idx = rootRef.current.children.indexOf(d as TreeRoot)
               if (idx !== -1 && d.children) {
                 currentMainIndexRef.current = idx
                 setCurrentMainIndex(idx)
@@ -317,7 +325,7 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
             }
           }
         })
-        .on('mouseover', function (event, d: any) {
+        .on('mouseover', function () {
           d3.select(this).select('circle')
             .transition()
             .duration(200)
@@ -333,41 +341,41 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
         })
 
       // Pulso especial para nodo raíz y nodos principales colapsados
-      nodeEnter.filter((d: any) => d.depth === 0 || (d.depth === 1 && !d.children))
+      nodeEnter.filter((d: TreeNode) => d.depth === 0 || (d.depth === 1 && !d.children))
         .append('circle')
         .attr('class', 'pulse-ring')
         .attr('r', 18)
         .style('fill', 'none')
-        .style('stroke', (d: any) => d.data.color)
+        .style('stroke', (d: TreeNode) => d.data.color)
         .style('stroke-width', 1.5)
         .style('stroke-opacity', 0.4)
 
       nodeEnter.append('circle')
         .attr('r', 1e-6)
-        .style('fill', (d: any) => d._children ? d.data.color : (darkMode ? '#1a1b26' : '#ffffff'))
-        .style('stroke', (d: any) => d.data.color)
+        .style('fill', (d: TreeNode) => d._children ? d.data.color : (darkMode ? '#1a1b26' : '#ffffff'))
+        .style('stroke', (d: TreeNode) => d.data.color)
         .style('stroke-width', 3)
 
       nodeEnter.append('text')
         .attr('dy', '.35em')
-        .attr('x', (d: any) => d.children || d._children ? -18 : 18)
-        .attr('text-anchor', (d: any) => d.children || d._children ? 'end' : 'start')
-        .text((d: any) => (viewMode === 'tree' && d.data.icon ? d.data.icon + ' ' : '') + d.data.name)
+        .attr('x', (d: TreeNode) => d.children || d._children ? -18 : 18)
+        .attr('text-anchor', (d: TreeNode) => d.children || d._children ? 'end' : 'start')
+        .text((d: TreeNode) => (viewMode === 'tree' && d.data.icon ? d.data.icon + ' ' : '') + d.data.name)
         .style('fill', darkMode ? '#e0e0e0' : '#333333')
         .style('font-size', '14px')
-        .style('font-weight', (d: any) => d.highlight ? 'bold' : 'normal')
-        .style('fill', (d: any) => d.highlight ? '#fbbf24' : (darkMode ? '#e0e0e0' : '#333333'))
+        .style('font-weight', (d: TreeNode) => d.highlight ? 'bold' : 'normal')
+        .style('fill', (d: TreeNode) => d.highlight ? '#fbbf24' : (darkMode ? '#e0e0e0' : '#333333'))
 
-      const nodeUpdate = nodeEnter.merge(node as any).transition()
+      const nodeUpdate = nodeEnter.merge(node).transition()
         .duration(duration)
-        .attr('transform', (d: any) => `translate(${d.y},${d.x})`)
+        .attr('transform', (d: TreeNode) => `translate(${d.y},${d.x})`)
         .style('opacity', 1)
 
       nodeUpdate.select('circle:not(.pulse-ring)')
         .attr('r', 10)
-        .style('fill', (d: any) => d._children ? d.data.color : (darkMode ? '#1a1b26' : '#ffffff'))
+        .style('fill', (d: TreeNode) => d._children ? d.data.color : (darkMode ? '#1a1b26' : '#ffffff'))
 
-      nodes.forEach((d: any) => {
+      nodes.forEach((d: TreeNode) => {
         d.x0 = d.x
         d.y0 = d.y
       })
@@ -379,17 +387,18 @@ export default function MapaConceptual({ onNodeSelect, searchTerm, viewMode, dar
     // Guardar referencia a update para la navegación
     updateFnRef.current = update
 
-    function diagonal(s: any, d: any) {
+    function diagonal(s: { x?: number; y?: number }, d: { x?: number; y?: number }) {
+      const sx = s.x ?? 0, sy = s.y ?? 0, dx = d.x ?? 0, dy = d.y ?? 0
       if (viewMode === 'radial') {
-        return `M ${s.x} ${s.y}
-                C ${(s.x + d.x) / 2} ${s.y},
-                  ${(s.x + d.x) / 2} ${d.y},
-                  ${d.x} ${d.y}`
+        return `M ${sx} ${sy}
+                C ${(sx + dx) / 2} ${sy},
+                  ${(sx + dx) / 2} ${dy},
+                  ${dx} ${dy}`
       } else {
-        return `M ${s.y} ${s.x}
-                C ${(s.y + d.y) / 2} ${s.x},
-                  ${(s.y + d.y) / 2} ${d.x},
-                  ${d.y} ${d.x}`
+        return `M ${sy} ${sx}
+                C ${(sy + dy) / 2} ${sx},
+                  ${(sy + dy) / 2} ${dx},
+                  ${dy} ${dx}`
       }
     }
 
